@@ -82,8 +82,8 @@ connectBtn.addEventListener('click', async () => {
 
         console.log('Suche nach SMART_GUARD...');
 
-        device = await navigator.bluetooth.requestDevice({
-            filters: [{ name: 'SMART_GUARD' }],
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
             optionalServices: [SERVICE_UUID]
         });
 

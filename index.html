@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0e27">
+    <title>Smart-Guard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-effects">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+    </div>
+
+    <div class="app-container">
+
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L4 6V11C4 16.55 7.16 21.74 12 23C16.84 21.74 20 16.55 20 11V6L12 2Z"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>Smart-Guard</h1>
+                    <p>Anti-Theft Protection</p>
+                </div>
+            </div>
+            <div class="status-dot" id="statusDot"></div>
+        </header>
+
+
+        <main class="main-card">
+
+
+            <div class="status-badge" id="statusBadge">
+                <div class="status-indicator"></div>
+                <span id="statusText">Getrennt</span>
+            </div>
+
+
+            <div class="device-visual">
+                <div class="signal-rings" id="signalRings">
+                    <div class="ring ring-1"></div>
+                    <div class="ring ring-2"></div>
+                    <div class="ring ring-3"></div>
+                </div>
+                <div class="device-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.5 12L17.5 12M17.5 12L11 5.5M17.5 12L11 18.5" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" opacity="0.3" />
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+                        <path d="M12 7V12L15 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+
+
+            <div class="info-section">
+                <h2 id="mainTitle">Bereit zum Verbinden</h2>
+                <p id="mainDescription">Verbinde dich mit deinem Smart-Guard Gerät um den Diebstahlschutz zu aktivieren.
+                </p>
+            </div>
+
+
+            <button id="connectBtn" class="primary-button">
+                <span class="button-content">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 7L17 17L12 22V2L17 7L7 17" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    Gerät verbinden
+                </span>
+            </button>
+
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Verbindung</div>
+                    <div class="stat-value" id="connectionStat">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Signal</div>
+                    <div class="stat-value" id="signalStat">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" id="statusStat">Inaktiv</div>
+                </div>
+            </div>
+
+        </main>
+
+
+        <footer class="footer">
+            <p>Smart-Guard v1.0 · Schulprojekt 2026</p>
+        </footer>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

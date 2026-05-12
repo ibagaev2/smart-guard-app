@@ -3,9 +3,13 @@ const CHAR_UUID = 'abcdefab-cdef-abcd-efab-cdefabcdefab';
 
 let characteristic = null;
 let isConnected = false;
+let isArmed = false;
 let device = null;
+let scheduleStartTimer = null;
+let scheduleEndTimer = null;
 
 const connectBtn = document.getElementById('connectBtn');
+const armBtn = document.getElementById('armBtn');
 const statusText = document.getElementById('statusText');
 const statusBadge = document.getElementById('statusBadge');
 const statusDot = document.getElementById('statusDot');
@@ -17,11 +21,12 @@ const statusStat = document.getElementById('statusStat');
 
 console.log('Smart-Guard App gestartet');
 
+// ===== BLUETOOTH SUPPORT CHECK =====
 function checkBluetoothSupport() {
     if (!navigator.bluetooth) {
         updateUI('error', {
             title: 'Bluetooth nicht verfügbar',
-            description: 'Bitte öffne diese App in Chrome oder Edge auf Android. iOS und Firefox werden leider nicht unterstützt.',
+            description: 'Bitte öffne diese App in Chrome oder Edge auf Android.',
             statusText: 'Nicht unterstützt',
             buttonText: 'Browser wechseln',
             buttonDisabled: true
@@ -31,8 +36,9 @@ function checkBluetoothSupport() {
     return true;
 }
 
+// ===== UI UPDATE =====
 function updateUI(state, data = {}) {
-    statusBadge.classList.remove('connected', 'alarm');
+    statusBadge.classList.remove('connected', 'alarm', 'armed');
     statusDot.classList.remove('connected', 'alarm');
     connectBtn.classList.remove('connected', 'alarm');
 
@@ -40,10 +46,19 @@ function updateUI(state, data = {}) {
         statusBadge.classList.add('connected');
         statusDot.classList.add('connected');
         connectBtn.classList.add('connected');
+        armBtn.style.display = 'block';
+    } else if (state === 'armed') {
+        statusBadge.classList.add('armed');
+        statusDot.classList.add('connected');
+        connectBtn.classList.add('connected');
+        armBtn.style.display = 'block';
     } else if (state === 'alarm') {
         statusBadge.classList.add('alarm');
         statusDot.classList.add('alarm');
         connectBtn.classList.add('alarm');
+        armBtn.style.display = 'none';
+    } else {
+        armBtn.style.display = 'none';
     }
 
     if (data.statusText) statusText.textContent = data.statusText;
@@ -51,28 +66,61 @@ function updateUI(state, data = {}) {
     if (data.description) mainDescription.textContent = data.description;
     if (data.buttonText) {
         connectBtn.querySelector('.button-content').innerHTML = `
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                 <path d="M7 7L17 17L12 22V2L17 7L7 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             ${data.buttonText}
         `;
     }
-    if (typeof data.buttonDisabled !== 'undefined') {
-        connectBtn.disabled = data.buttonDisabled;
+    if (data.armText) {
+        armBtn.querySelector('.button-content').innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L4 6V11C4 16.55 7.16 21.74 12 23C16.84 21.74 20 16.55 20 11V6L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            ${data.armText}
+        `;
     }
+    if (typeof data.buttonDisabled !== 'undefined') connectBtn.disabled = data.buttonDisabled;
     if (data.connectionStat) connectionStat.textContent = data.connectionStat;
     if (data.signalStat) signalStat.textContent = data.signalStat;
     if (data.statusStat) statusStat.textContent = data.statusStat;
 }
 
+// ===== AKKUSTAND =====
+function updateBattery(prozent) {
+    const battEl = document.getElementById('batteryStat');
+    if (!battEl) return;
+    let emoji = prozent < 20 ? '🪫' : '🔋';
+    battEl.textContent = emoji + ' ' + prozent + '%';
+    battEl.style.color = prozent < 20 ? 'var(--danger)' : prozent < 50 ? 'var(--warning)' : 'var(--success)';
+}
+
+// ===== NACHRICHTEN VOM ESP32 =====
+function handleEspNachricht(wert) {
+    console.log('ESP32 sagt:', wert);
+    if (wert === 'ALARM') {
+        triggerAlarm();
+    } else if (wert.startsWith('BAT:')) {
+        const prozent = parseInt(wert.split(':')[1]);
+        if (!isNaN(prozent)) updateBattery(prozent);
+    } else if (wert === 'ARMED') {
+        console.log('ESP32 bestätigt: ARMED');
+    } else if (wert === 'STOPPED') {
+        console.log('ESP32 bestätigt: STOPPED');
+    }
+}
+
+// ===== VERBINDEN =====
 connectBtn.addEventListener('click', async () => {
     if (!checkBluetoothSupport()) return;
-
     if (isConnected) {
         await disconnect();
         return;
     }
+    await connectToDevice();
+});
 
+async function connectToDevice() {
     try {
         updateUI('connecting', {
             statusText: 'Suche Gerät...',
@@ -80,83 +128,196 @@ connectBtn.addEventListener('click', async () => {
             description: 'Bitte wähle "SMART_GUARD" aus der Liste aus.'
         });
 
-        console.log('Suche nach SMART_GUARD...');
-
         device = await navigator.bluetooth.requestDevice({
             filters: [{ name: 'SMART_GUARD' }],
             optionalServices: [SERVICE_UUID]
         });
 
-        console.log('Gerät gefunden:', device.name);
-
         device.addEventListener('gattserverdisconnected', onDisconnected);
 
-        updateUI('connecting', {
-            statusText: 'Verbinde...',
-            title: 'Stelle Verbindung her...'
-        });
-
         const server = await device.gatt.connect();
-        console.log('GATT-Server verbunden');
-
         const service = await server.getPrimaryService(SERVICE_UUID);
-        console.log('Service gefunden');
-
         characteristic = await service.getCharacteristic(CHAR_UUID);
-        console.log('Characteristic gefunden');
+
+        characteristic.addEventListener('characteristicvaluechanged', (e) => {
+            const wert = new TextDecoder().decode(e.target.value);
+            handleEspNachricht(wert);
+        });
+        await characteristic.startNotifications();
 
         isConnected = true;
+        isArmed = false;
 
         updateUI('connected', {
             statusText: 'Verbunden',
             title: 'Schutz bereit',
-            description: 'Dein Smart-Guard ist verbunden. Aktiviere den Diebstahlschutz wann immer du möchtest.',
+            description: 'Verbunden! Drücke "Schutz aktivieren" um die Überwachung zu starten.',
             buttonText: 'Trennen',
-            connectionStat: 'Aktiv',
+            armText: 'Schutz aktivieren',
+            connectionStat: 'BLE',
             signalStat: 'Stark',
             statusStat: 'Bereit'
         });
 
     } catch (error) {
-        console.error('Verbindungsfehler:', error);
-
+        console.error('Fehler:', error);
         let errorMsg = 'Verbindung fehlgeschlagen';
-        if (error.name === 'NotFoundError') {
-            errorMsg = 'Kein Gerät gewählt';
-        } else if (error.name === 'SecurityError') {
-            errorMsg = 'HTTPS oder localhost erforderlich';
-        }
-
+        if (error.name === 'NotFoundError') errorMsg = 'Kein Gerät gewählt';
+        else if (error.name === 'SecurityError') errorMsg = 'HTTPS erforderlich';
         updateUI('error', {
             statusText: 'Fehler',
             title: errorMsg,
-            description: 'Stelle sicher dass dein Smart-Guard eingeschaltet und in Reichweite ist.',
+            description: 'Stelle sicher dass dein Smart-Guard eingeschaltet ist.',
             buttonText: 'Erneut versuchen'
+        });
+    }
+}
+
+// ===== ARM BUTTON =====
+armBtn.addEventListener('click', async () => {
+    if (!characteristic) return;
+
+    if (!isArmed) {
+        // Aktivieren
+        await sendCommand('ARM');
+        isArmed = true;
+        updateUI('armed', {
+            statusText: 'Aktiv',
+            title: '🔒 Schutz aktiv',
+            description: 'Dein Rucksack wird überwacht. Alarm bei Bewegung.',
+            armText: 'Schutz deaktivieren',
+            statusStat: 'Aktiv'
+        });
+    } else {
+        // Deaktivieren
+        await sendCommand('STOP');
+        isArmed = false;
+        updateUI('connected', {
+            statusText: 'Verbunden',
+            title: 'Schutz bereit',
+            description: 'Schutz deaktiviert. Drücke "Schutz aktivieren" um wieder zu starten.',
+            armText: 'Schutz aktivieren',
+            statusStat: 'Bereit'
         });
     }
 });
 
+// ===== BEFEHL SENDEN =====
+async function sendCommand(cmd) {
+    if (!characteristic) return;
+    await characteristic.writeValue(new TextEncoder().encode(cmd));
+    console.log('Gesendet:', cmd);
+}
+
+// ===== TRENNEN =====
 async function disconnect() {
-    if (device && device.gatt.connected) {
-        device.gatt.disconnect();
-    }
+    await sendCommand('STOP');
+    if (device && device.gatt.connected) device.gatt.disconnect();
     onDisconnected();
 }
 
 function onDisconnected() {
-    console.log('Verbindung getrennt');
     isConnected = false;
+    isArmed = false;
     characteristic = null;
-
     updateUI('disconnected', {
         statusText: 'Getrennt',
         title: 'Bereit zum Verbinden',
-        description: 'Verbinde dich mit deinem Smart-Guard Gerät um den Diebstahlschutz zu aktivieren.',
+        description: 'Verbinde dich mit deinem Smart-Guard Gerät.',
         buttonText: 'Gerät verbinden',
         connectionStat: '—',
         signalStat: '—',
         statusStat: 'Inaktiv'
     });
+    const battEl = document.getElementById('batteryStat');
+    if (battEl) { battEl.textContent = '—'; battEl.style.color = ''; }
 }
 
+// ===== ALARM =====
+async function triggerAlarm() {
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+        new Notification('🚨 Smart-Guard ALARM!', { body: 'Dein Rucksack wurde bewegt!' });
+    }
+    updateUI('alarm', {
+        statusText: 'ALARM!',
+        title: '🚨 Alarm ausgelöst!',
+        description: 'Dein Rucksack wurde bewegt! Drücke Ausschalten um den Alarm zu stoppen.',
+        buttonText: 'Ausschalten',
+        statusStat: '⚠️ ALARM'
+    });
+    connectBtn.onclick = async () => {
+        await sendCommand('STOP');
+        isArmed = false;
+        connectBtn.onclick = null;
+        updateUI('connected', {
+            statusText: 'Verbunden',
+            title: 'Schutz bereit',
+            description: 'Alarm gestoppt.',
+            buttonText: 'Trennen',
+            armText: 'Schutz aktivieren',
+            statusStat: 'Bereit'
+        });
+    };
+}
+
+// ===== ZEITPLAN =====
+document.getElementById('showScheduleBtn').addEventListener('click', () => {
+    document.getElementById('scheduleSection').classList.toggle('open');
+});
+
+document.getElementById('cancelScheduleBtn').addEventListener('click', () => {
+    document.getElementById('scheduleSection').classList.remove('open');
+    if (scheduleStartTimer) clearTimeout(scheduleStartTimer);
+    if (scheduleEndTimer) clearTimeout(scheduleEndTimer);
+    document.getElementById('scheduleStatus').textContent = '';
+});
+
+document.getElementById('scheduleBtn').addEventListener('click', () => {
+    const startTime = document.getElementById('startTime').value;
+    const endTime = document.getElementById('endTime').value;
+    const scheduleStatus = document.getElementById('scheduleStatus');
+
+    if (!startTime || !endTime) {
+        scheduleStatus.textContent = 'Bitte beide Zeiten eingeben!';
+        scheduleStatus.style.color = 'var(--danger)';
+        return;
+    }
+
+    if (scheduleStartTimer) clearTimeout(scheduleStartTimer);
+    if (scheduleEndTimer) clearTimeout(scheduleEndTimer);
+
+    const now = new Date();
+    const [startH, startM] = startTime.split(':');
+    const start = new Date();
+    start.setHours(parseInt(startH), parseInt(startM), 0, 0);
+    const [endH, endM] = endTime.split(':');
+    const end = new Date();
+    end.setHours(parseInt(endH), parseInt(endM), 0, 0);
+
+    if (start <= now) start.setDate(start.getDate() + 1);
+    if (end <= now) end.setDate(end.getDate() + 1);
+
+    scheduleStartTimer = setTimeout(async () => {
+        await connectToDevice();
+        setTimeout(async () => {
+            if (isConnected) {
+                await sendCommand('ARM');
+                isArmed = true;
+            }
+        }, 3000);
+    }, start - now);
+
+    scheduleEndTimer = setTimeout(async () => {
+        if (isConnected) await disconnect();
+    }, end - now);
+
+    const startStr = start.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+    const endStr = end.toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+    scheduleStatus.style.color = 'var(--success)';
+    scheduleStatus.textContent = `Geplant: ${startStr} bis ${endStr}`;
+});
+
+// ===== START =====
 checkBluetoothSupport();

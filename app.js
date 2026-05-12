@@ -7,6 +7,7 @@ let isArmed = false;
 let device = null;
 let scheduleStartTimer = null;
 let scheduleEndTimer = null;
+let notificationPermission = false;
 
 const connectBtn = document.getElementById('connectBtn');
 const armBtn = document.getElementById('armBtn');
@@ -21,12 +22,23 @@ const statusStat = document.getElementById('statusStat');
 
 console.log('Smart-Guard App gestartet');
 
+// ===== NOTIFICATION BERECHTIGUNG SOFORT ABFRAGEN =====
+// Muss früh abgefragt werden, nicht erst beim Alarm!
+async function requestNotificationPermission() {
+    if ('Notification' in window) {
+        const permission = await Notification.requestPermission();
+        notificationPermission = permission === 'granted';
+        console.log('Notification Berechtigung:', permission);
+    }
+}
+requestNotificationPermission();
+
 // ===== BLUETOOTH SUPPORT CHECK =====
 function checkBluetoothSupport() {
     if (!navigator.bluetooth) {
         updateUI('error', {
             title: 'Bluetooth nicht verfügbar',
-            description: 'Bitte öffne diese App in Chrome oder Edge auf Android.',
+            description: 'Bitte öffne diese App in Chrome auf Android. iOS wird nicht unterstützt.',
             statusText: 'Nicht unterstützt',
             buttonText: 'Browser wechseln',
             buttonDisabled: true
@@ -103,10 +115,6 @@ function handleEspNachricht(wert) {
     } else if (wert.startsWith('BAT:')) {
         const prozent = parseInt(wert.split(':')[1]);
         if (!isNaN(prozent)) updateBattery(prozent);
-    } else if (wert === 'ARMED') {
-        console.log('ESP32 bestätigt: ARMED');
-    } else if (wert === 'STOPPED') {
-        console.log('ESP32 bestätigt: STOPPED');
     }
 }
 
@@ -151,7 +159,7 @@ async function connectToDevice() {
         updateUI('connected', {
             statusText: 'Verbunden',
             title: 'Schutz bereit',
-            description: 'Verbunden! Drücke "Schutz aktivieren" um die Überwachung zu starten.',
+            description: 'Verbunden! Drücke "Schutz aktivieren" um zu starten.',
             buttonText: 'Trennen',
             armText: 'Schutz aktivieren',
             connectionStat: 'BLE',
@@ -167,7 +175,7 @@ async function connectToDevice() {
         updateUI('error', {
             statusText: 'Fehler',
             title: errorMsg,
-            description: 'Stelle sicher dass dein Smart-Guard eingeschaltet ist.',
+            description: 'Stelle sicher dass Smart-Guard eingeschaltet ist.',
             buttonText: 'Erneut versuchen'
         });
     }
@@ -176,26 +184,23 @@ async function connectToDevice() {
 // ===== ARM BUTTON =====
 armBtn.addEventListener('click', async () => {
     if (!characteristic) return;
-
     if (!isArmed) {
-        // Aktivieren
         await sendCommand('ARM');
         isArmed = true;
         updateUI('armed', {
             statusText: 'Aktiv',
             title: '🔒 Schutz aktiv',
-            description: 'Dein Rucksack wird überwacht. Alarm bei Bewegung.',
+            description: 'Rucksack wird überwacht. Alarm bei Bewegung.',
             armText: 'Schutz deaktivieren',
             statusStat: 'Aktiv'
         });
     } else {
-        // Deaktivieren
         await sendCommand('STOP');
         isArmed = false;
         updateUI('connected', {
             statusText: 'Verbunden',
             title: 'Schutz bereit',
-            description: 'Schutz deaktiviert. Drücke "Schutz aktivieren" um wieder zu starten.',
+            description: 'Schutz deaktiviert.',
             armText: 'Schutz aktivieren',
             statusStat: 'Bereit'
         });
@@ -205,13 +210,17 @@ armBtn.addEventListener('click', async () => {
 // ===== BEFEHL SENDEN =====
 async function sendCommand(cmd) {
     if (!characteristic) return;
-    await characteristic.writeValue(new TextEncoder().encode(cmd));
-    console.log('Gesendet:', cmd);
+    try {
+        await characteristic.writeValue(new TextEncoder().encode(cmd));
+        console.log('Gesendet:', cmd);
+    } catch (e) {
+        console.error('Senden fehlgeschlagen:', e);
+    }
 }
 
 // ===== TRENNEN =====
 async function disconnect() {
-    await sendCommand('STOP');
+    try { await sendCommand('STOP'); } catch (e) { }
     if (device && device.gatt.connected) device.gatt.disconnect();
     onDisconnected();
 }
@@ -235,11 +244,30 @@ function onDisconnected() {
 
 // ===== ALARM =====
 async function triggerAlarm() {
-    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-        new Notification('🚨 Smart-Guard ALARM!', { body: 'Dein Rucksack wurde bewegt!' });
+    console.log('ALARM AUSGELÖST!');
+
+    // Handy vibrieren
+    if (navigator.vibrate) {
+        navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
     }
+
+    // Notification — Berechtigung wurde schon beim Start abgefragt
+    if (notificationPermission) {
+        new Notification('🚨 Smart-Guard ALARM!', {
+            body: 'Dein Rucksack wurde bewegt!',
+            requireInteraction: true  // Bleibt sichtbar bis User klickt
+        });
+    } else {
+        // Nochmal versuchen falls vorher abgelehnt
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+            new Notification('🚨 Smart-Guard ALARM!', {
+                body: 'Dein Rucksack wurde bewegt!',
+                requireInteraction: true
+            });
+        }
+    }
+
     updateUI('alarm', {
         statusText: 'ALARM!',
         title: '🚨 Alarm ausgelöst!',
@@ -247,10 +275,13 @@ async function triggerAlarm() {
         buttonText: 'Ausschalten',
         statusStat: '⚠️ ALARM'
     });
+
+    // Ausschalten Button
     connectBtn.onclick = async () => {
         await sendCommand('STOP');
         isArmed = false;
         connectBtn.onclick = null;
+        if (navigator.vibrate) navigator.vibrate(0); // Vibration stoppen
         updateUI('connected', {
             statusText: 'Verbunden',
             title: 'Schutz bereit',

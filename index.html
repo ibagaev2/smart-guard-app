@@ -38,15 +38,12 @@
             <div class="status-dot" id="statusDot"></div>
         </header>
 
-
         <main class="main-card">
-
 
             <div class="status-badge" id="statusBadge">
                 <div class="status-indicator"></div>
                 <span id="statusText">Getrennt</span>
             </div>
-
 
             <div class="device-visual">
                 <div class="signal-rings" id="signalRings">
@@ -56,15 +53,11 @@
                 </div>
                 <div class="device-icon">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6.5 12L17.5 12M17.5 12L11 5.5M17.5 12L11 18.5" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round" opacity="0.3" />
-                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
-                        <path d="M12 7V12L15 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
+                        <path d="M6.5 8.5L17.5 15.5L12 19V5L17.5 8.5L6.5 15.5" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </div>
             </div>
-
 
             <div class="info-section">
                 <h2 id="mainTitle">Bereit zum Verbinden</h2>
@@ -72,7 +65,7 @@
                 </p>
             </div>
 
-
+            <!-- Verbinden Button -->
             <button id="connectBtn" class="primary-button">
                 <span class="button-content">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -83,8 +76,48 @@
                 </span>
             </button>
 
+            <!-- ARM Button — nur sichtbar wenn verbunden -->
+            <button id="armBtn" class="arm-button" style="display:none">
+                <span class="button-content">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L4 6V11C4 16.55 7.16 21.74 12 23C16.84 21.74 20 16.55 20 11V6L12 2Z"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    Schutz aktivieren
+                </span>
+            </button>
 
-            <div class="stats-grid">
+            <!-- Verbindung planen Button -->
+            <button id="showScheduleBtn" class="secondary-button">
+                <span class="button-content">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+                        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                    Verbindung planen
+                </span>
+            </button>
+
+            <!-- Zeitplan -->
+            <div class="schedule-section" id="scheduleSection">
+                <div class="schedule-title">Geplante Verbindung</div>
+                <div class="schedule-row">
+                    <div class="schedule-field">
+                        <label>Aktiv ab</label>
+                        <input type="time" id="startTime" value="14:30">
+                    </div>
+                    <div class="schedule-field">
+                        <label>Aktiv bis</label>
+                        <input type="time" id="endTime" value="19:30">
+                    </div>
+                </div>
+                <button id="scheduleBtn" class="schedule-button">Planen</button>
+                <button id="cancelScheduleBtn" class="cancel-button">Abbrechen</button>
+                <div id="scheduleStatus" class="schedule-info"></div>
+            </div>
+
+            <!-- Stats Grid mit 4 Karten -->
+            <div class="stats-grid stats-grid-4">
                 <div class="stat-card">
                     <div class="stat-label">Verbindung</div>
                     <div class="stat-value" id="connectionStat">—</div>
@@ -97,13 +130,16 @@
                     <div class="stat-label">Status</div>
                     <div class="stat-value" id="statusStat">Inaktiv</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-label">Akku</div>
+                    <div class="stat-value" id="batteryStat">—</div>
+                </div>
             </div>
 
         </main>
 
-
         <footer class="footer">
-            <p>Smart-Guard v1.0 · Schulprojekt 2026</p>
+            <p>Smart-Guard v1.0 · Sommerprojekt 2026</p>
         </footer>
 
     </div>

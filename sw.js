@@ -1,3 +1,4 @@
+// Service Worker für Smart-Guard Push Notifications
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', () => self.clients.claim());
 

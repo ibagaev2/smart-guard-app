@@ -8,6 +8,7 @@ let device = null;
 let scheduleStartTimer = null;
 let scheduleEndTimer = null;
 let notificationPermission = false;
+let swRegistration = null;
 
 const connectBtn = document.getElementById('connectBtn');
 const armBtn = document.getElementById('armBtn');
@@ -22,16 +23,53 @@ const statusStat = document.getElementById('statusStat');
 
 console.log('Smart-Guard App gestartet');
 
-// ===== NOTIFICATION BERECHTIGUNG SOFORT ABFRAGEN =====
-// Muss früh abgefragt werden, nicht erst beim Alarm!
-async function requestNotificationPermission() {
+// ===== SERVICE WORKER + NOTIFICATION =====
+async function setupNotifications() {
+    // Service Worker registrieren
+    if ('serviceWorker' in navigator) {
+        try {
+            swRegistration = await navigator.serviceWorker.register('/sw.js');
+            console.log('Service Worker registriert!');
+        } catch (e) {
+            console.log('Service Worker Fehler:', e);
+        }
+    }
+
+    // Berechtigung abfragen
     if ('Notification' in window) {
         const permission = await Notification.requestPermission();
         notificationPermission = permission === 'granted';
         console.log('Notification Berechtigung:', permission);
     }
 }
-requestNotificationPermission();
+setupNotifications();
+
+// ===== NOTIFICATION ANZEIGEN =====
+async function showNotification(titel, body) {
+    if (!notificationPermission) return;
+
+    // Service Worker Notification (funktioniert auch im Hintergrund)
+    if (swRegistration) {
+        try {
+            await swRegistration.showNotification(titel, {
+                body: body,
+                vibrate: [500, 200, 500, 200, 500],
+                requireInteraction: true,
+                tag: 'smart-guard-alarm'
+            });
+            console.log('Service Worker Notification gesendet!');
+            return;
+        } catch (e) {
+            console.log('SW Notification fehlgeschlagen, fallback:', e);
+        }
+    }
+
+    // Fallback: normale Notification
+    new Notification(titel, {
+        body: body,
+        requireInteraction: true
+    });
+}
 
 // ===== BLUETOOTH SUPPORT CHECK =====
 function checkBluetoothSupport() {
@@ -251,22 +289,8 @@ async function triggerAlarm() {
         navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
     }
 
-    // Notification — Berechtigung wurde schon beim Start abgefragt
-    if (notificationPermission) {
-        new Notification('🚨 Smart-Guard ALARM!', {
-            body: 'Dein Rucksack wurde bewegt!',
-            requireInteraction: true  // Bleibt sichtbar bis User klickt
-        });
-    } else {
-        // Nochmal versuchen falls vorher abgelehnt
-        const perm = await Notification.requestPermission();
-        if (perm === 'granted') {
-            new Notification('🚨 Smart-Guard ALARM!', {
-                body: 'Dein Rucksack wurde bewegt!',
-                requireInteraction: true
-            });
-        }
-    }
+    // Notification über Service Worker
+    await showNotification('🚨 Smart-Guard ALARM!', 'Dein Rucksack wurde bewegt!');
 
     updateUI('alarm', {
         statusText: 'ALARM!',
@@ -276,12 +300,11 @@ async function triggerAlarm() {
         statusStat: '⚠️ ALARM'
     });
 
-    // Ausschalten Button
     connectBtn.onclick = async () => {
         await sendCommand('STOP');
         isArmed = false;
         connectBtn.onclick = null;
-        if (navigator.vibrate) navigator.vibrate(0); // Vibration stoppen
+        if (navigator.vibrate) navigator.vibrate(0);
         updateUI('connected', {
             statusText: 'Verbunden',
             title: 'Schutz bereit',

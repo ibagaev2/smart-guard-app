@@ -25,50 +25,56 @@ console.log('Smart-Guard App gestartet');
 
 // ===== SERVICE WORKER + NOTIFICATION =====
 async function setupNotifications() {
-    // Service Worker registrieren
     if ('serviceWorker' in navigator) {
         try {
-            swRegistration = await navigator.serviceWorker.register('/sw.js');
-            console.log('Service Worker registriert!');
+            // Pfad relativ zur aktuellen Seite — funktioniert auf GitHub Pages und localhost
+            swRegistration = await navigator.serviceWorker.register('./sw.js');
+            console.log('Service Worker registriert:', swRegistration.scope);
         } catch (e) {
             console.log('Service Worker Fehler:', e);
         }
     }
 
-    // Berechtigung abfragen
     if ('Notification' in window) {
         const permission = await Notification.requestPermission();
         notificationPermission = permission === 'granted';
-        console.log('Notification Berechtigung:', permission);
+        console.log('Notification:', permission);
     }
 }
 setupNotifications();
 
 // ===== NOTIFICATION ANZEIGEN =====
-async function showNotification(titel, body) {
-    if (!notificationPermission) return;
+async function showNotification() {
+    if (!notificationPermission) {
+        console.log('Keine Notification Berechtigung!');
+        return;
+    }
 
-    // Service Worker Notification (funktioniert auch im Hintergrund)
+    // Service Worker Notification
     if (swRegistration) {
         try {
-            await swRegistration.showNotification(titel, {
-                body: body,
+            await swRegistration.showNotification('🚨 Smart-Guard ALARM!', {
+                body: 'Dein Rucksack wurde bewegt!',
                 vibrate: [500, 200, 500, 200, 500],
                 requireInteraction: true,
-                tag: 'smart-guard-alarm'
+                tag: 'alarm'
             });
-            console.log('Service Worker Notification gesendet!');
+            console.log('Notification gesendet!');
             return;
         } catch (e) {
-            console.log('SW Notification fehlgeschlagen, fallback:', e);
+            console.log('SW Notification Fehler:', e);
         }
     }
 
-    // Fallback: normale Notification
-    new Notification(titel, {
-        body: body,
-        requireInteraction: true
-    });
+    // Fallback
+    try {
+        new Notification('🚨 Smart-Guard ALARM!', {
+            body: 'Dein Rucksack wurde bewegt!',
+            requireInteraction: true
+        });
+    } catch (e) {
+        console.log('Fallback Notification Fehler:', e);
+    }
 }
 
 // ===== BLUETOOTH SUPPORT CHECK =====
@@ -76,7 +82,7 @@ function checkBluetoothSupport() {
     if (!navigator.bluetooth) {
         updateUI('error', {
             title: 'Bluetooth nicht verfügbar',
-            description: 'Bitte öffne diese App in Chrome auf Android. iOS wird nicht unterstützt.',
+            description: 'Bitte öffne diese App in Chrome auf Android.',
             statusText: 'Nicht unterstützt',
             buttonText: 'Browser wechseln',
             buttonDisabled: true
@@ -159,10 +165,7 @@ function handleEspNachricht(wert) {
 // ===== VERBINDEN =====
 connectBtn.addEventListener('click', async () => {
     if (!checkBluetoothSupport()) return;
-    if (isConnected) {
-        await disconnect();
-        return;
-    }
+    if (isConnected) { await disconnect(); return; }
     await connectToDevice();
 });
 
@@ -180,7 +183,6 @@ async function connectToDevice() {
         });
 
         device.addEventListener('gattserverdisconnected', onDisconnected);
-
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService(SERVICE_UUID);
         characteristic = await service.getCharacteristic(CHAR_UUID);
@@ -283,14 +285,8 @@ function onDisconnected() {
 // ===== ALARM =====
 async function triggerAlarm() {
     console.log('ALARM AUSGELÖST!');
-
-    // Handy vibrieren
-    if (navigator.vibrate) {
-        navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
-    }
-
-    // Notification über Service Worker
-    await showNotification('🚨 Smart-Guard ALARM!', 'Dein Rucksack wurde bewegt!');
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500, 200, 500]);
+    await showNotification();
 
     updateUI('alarm', {
         statusText: 'ALARM!',
@@ -356,10 +352,7 @@ document.getElementById('scheduleBtn').addEventListener('click', () => {
     scheduleStartTimer = setTimeout(async () => {
         await connectToDevice();
         setTimeout(async () => {
-            if (isConnected) {
-                await sendCommand('ARM');
-                isArmed = true;
-            }
+            if (isConnected) { await sendCommand('ARM'); isArmed = true; }
         }, 3000);
     }, start - now);
 
